@@ -1,5 +1,5 @@
 CC=mpic++
-CFLAGS=
+CFLAGS=-g
 
 all: server client
 

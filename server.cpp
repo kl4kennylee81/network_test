@@ -18,8 +18,22 @@ int main (int argc, char* argv[]) {
     int name_len;
     MPI::Get_processor_name(processor_name, name_len);
 
-    cout << "Hello from processor " << processor_name <<
+    cout << "Hello from server process " << processor_name <<
     	", rank " << world_rank << " of " <<  world_size << " processors\n";
+
+    char port_name[MPI_MAX_PORT_NAME];
+    MPI::Open_port(MPI::INFO_NULL, port_name);
+
+    cout << "Port name: " << port_name << "\n";
+
+    MPI::Intercomm intercom = MPI::COMM_WORLD.Accept(
+    	port_name,
+    	MPI::INFO_NULL,
+    	0);
+
+    MPI::Publish_name("server", MPI::INFO_NULL, port_name);
+
+    cout << "Accepted connection!" << "\n";
 
     /* Shutdown */
     MPI::Finalize();
