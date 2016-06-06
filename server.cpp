@@ -1,6 +1,7 @@
 /**
  * OpenMPI Echo Server Test
  */
+#include <mpi.h>
 
 int main (int argc, char* argv[]) {
     
