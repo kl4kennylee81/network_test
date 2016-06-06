@@ -26,14 +26,21 @@ int main (int argc, char* argv[]) {
 
     cout << "Port name: " << port_name << "\n";
 
-    MPI::Intercomm intercom = MPI::COMM_WORLD.Accept(
+    MPI::Publish_name("server", MPI::INFO_NULL, port_name);
+
+    MPI::Intercomm intercom = MPI::COMM_SELF.Accept(
     	port_name,
     	MPI::INFO_NULL,
     	0);
 
-    MPI::Publish_name("server", MPI::INFO_NULL, port_name);
-
     cout << "Accepted connection!" << "\n";
+
+    char buffer[32] = {0};
+    intercom.Recv(buffer, 32, MPI::CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG);
+    cout << "Received: " << buffer << "\n";
+
+    intercom.Free();
+    MPI::Close_port(port_name);
 
     /* Shutdown */
     MPI::Finalize();
