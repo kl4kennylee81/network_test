@@ -27,7 +27,6 @@ int main (int argc, char* argv[], char** envp) {
 			cout << "Error reading from stdin\n";
 			return 1;
 		}
-		printf("%lu\n",msg_size);
 		server.Send(message, msg_size, MPI::CHAR, 0, 0);
 
 		// this is recieving back the echo
