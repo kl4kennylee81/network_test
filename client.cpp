@@ -3,15 +3,19 @@
  */
 
 #include <mpi.h>
+#include <stdio.h>
 
 using namespace std;
 
-int main (int argc, char* argv[]) {
+int main (int argc, char* argv[], char** envp) {
 
-	if (argc <= 1) {
+	char *port_name = NULL;
+	size_t size;
+	cout << "Enter port: ";
+	if (getline(&port_name, &size, stdin) == -1) {
+		cout << "Error reading from stdin\n";
 		return 1;
 	}
-	char *port_name = argv[1];
 
 	MPI::Init(argc, argv);
 
