@@ -35,10 +35,14 @@ int main (int argc, char* argv[]) {
 
     cout << "Accepted connection!" << "\n";
 
-    char buffer[32] = {0};
-    intercom.Recv(buffer, 32, MPI::CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG);
-    cout << "Received: " << buffer << "\n";
+    while (1){
+        char buffer[32] = {0};
+        intercom.Recv(buffer, 32, MPI::CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG);
+        cout << "Received: " << buffer << "\n";
 
+        // send back the recieved message
+        intercom.Send(buffer, strlen(buffer) + 1, MPI::CHAR, 0, 0);
+    }
     intercom.Free();
     MPI::Close_port(port_name);
 

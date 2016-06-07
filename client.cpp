@@ -11,7 +11,7 @@ int main (int argc, char* argv[], char** envp) {
 
 	char *port_name = NULL;
 	size_t size;
-	cout << "Enter port: ";
+	cout << "Enter port: \n";
 	if (getline(&port_name, &size, stdin) == -1) {
 		cout << "Error reading from stdin\n";
 		return 1;
@@ -26,10 +26,22 @@ int main (int argc, char* argv[], char** envp) {
 	MPI::Intracomm server = MPI::COMM_WORLD.Connect(port_name,
 		MPI::INFO_NULL,
 		0);
+	while (1){
+		char *message = NULL;
+		size_t msg_size;
+		cout << "Enter Msg: \n";
+		if (getline(&message, &msg_size, stdin) == -1) {
+			cout << "Error reading from stdin\n";
+			return 1;
+		}
+		printf("%lu\n",msg_size);
+		server.Send(message, msg_size, MPI::CHAR, 0, 0);
 
-	const char message[] = "Hello world";
-	server.Send(message, strlen(message) + 1, MPI::CHAR, 0, 0);
-
+		// this is recieving back the echo
+		char buffer[32] = {0};
+	    server.Recv(buffer, 32, MPI::CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG);
+	    cout << "Received: " << buffer << "\n";
+	}
 	MPI::Finalize();
     return 0;
 }
