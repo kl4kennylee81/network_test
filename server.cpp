@@ -2,13 +2,44 @@
  * OpenMPI Echo Server Test
  */
 #include <mpi.h>
+#include <thread>
 
 using namespace std;
+
+
+//
+// created thread to handle the client
+void static new_connection (MPI::Intercomm intercom, int count){
+    cout << "Accepted connection on thread " << count << "\n";
+
+    while (1){
+        char buffer[32] = {0};
+        cout << "Waiting for data on thread " << count << endl;
+        intercom.Recv(buffer, 32, MPI::CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG);
+        cout << "Received (" << strlen(buffer) << " bytes): " << buffer << "\n";
+
+        // send back the recieved message
+        intercom.Send(buffer, strlen(buffer) + 1, MPI::CHAR, 0, 0);
+        cout << "im here\n";
+    }
+
+    intercom.Free();
+}
+
+
 
 int main (int argc, char* argv[]) {
     
     /* Initilize execution environment */
-    MPI::Init(argc, argv);
+    // MPI::Init(argc, argv);
+
+    /* Initialize a multithreaded environment */
+    int provided = MPI::Init_thread(argc, argv, MPI::THREAD_MULTIPLE);
+    if (provided < MPI::THREAD_MULTIPLE)
+    {
+        printf("ERROR: The MPI library does not have full thread support\n");
+        MPI::COMM_WORLD.Abort(1);
+    }
 
     int world_size = MPI::COMM_WORLD.Get_size();
 
@@ -28,22 +59,17 @@ int main (int argc, char* argv[]) {
 
     MPI::Publish_name("server", MPI::INFO_NULL, port_name);
 
-    MPI::Intercomm intercom = MPI::COMM_SELF.Accept(
-    	port_name,
-    	MPI::INFO_NULL,
-    	0);
+    int count = 0;
+    // loop back to accepting
+    while (1) {
+        cout << "Waiting for client " << count << endl;
+        MPI::Intercomm intercom = MPI::COMM_SELF.Accept(port_name,MPI::INFO_NULL,0);
+        std::thread t1(new_connection,intercom,count);
 
-    cout << "Accepted connection!" << "\n";
-
-    while (1){
-        char buffer[32] = {0};
-        intercom.Recv(buffer, 32, MPI::CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG);
-        cout << "Received: " << buffer << "\n";
-
-        // send back the recieved message
-        intercom.Send(buffer, strlen(buffer) + 1, MPI::CHAR, 0, 0);
+        t1.detach();
+        count++;
     }
-    intercom.Free();
+
     MPI::Close_port(port_name);
 
     /* Shutdown */
