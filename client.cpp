@@ -22,24 +22,35 @@ int main (int argc, char* argv[], char** envp) {
 		MPI::INFO_NULL,
 		0);
 
-	size_t buf_size = MAX_MESSAGE_SIZE;
-	char message[MAX_MESSAGE_SIZE] = {0};
-	char* msg_ptr = message;
-	ssize_t bytes_read;
-	while (1){
-		cout << "Enter Msg: \n";
-		if ((bytes_read = getline(&msg_ptr, &buf_size, stdin)) == -1) {
-			cout << "Error reading from stdin\n";
-			return 1;
-		}
-		cout << "Sending bytes: " << bytes_read << endl;
-		server.Send(message, bytes_read, MPI::CHAR, 0, 0);
+	// size_t buf_size = MAX_MESSAGE_SIZE;
+	// char message[MAX_MESSAGE_SIZE] = {0};
+	// char* msg_ptr = message;
+	// ssize_t bytes_read;
+	// while (1){
+	// 	cout << "Enter Msg: \n";
+	// 	if ((bytes_read = getline(&msg_ptr, &buf_size, stdin)) == -1) {
+	// 		cout << "Error reading from stdin\n";
+	// 		return 1;
+	// 	}
+	// 	cout << "Sending bytes: " << bytes_read << endl;
+	// 	server.Send(message, bytes_read, MPI::CHAR, 0, 0);
+
+	// 	// this is recieving back the echo
+	// 	memset(message, 0, bytes_read);
+	//     server.Recv(message, MAX_MESSAGE_SIZE, MPI::CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG);
+	//     cout << "Received: " << message << "\n";
+	// }
+	int i;
+	int count = 10000;
+	char message[MAX_MESSAGE_SIZE] = "Hello world!";
+	for (i = 0; i < count; i++) {
+		server.Send(message, strlen(message), MPI::CHAR, 0, 0);
 
 		// this is recieving back the echo
-		memset(message, 0, bytes_read);
 	    server.Recv(message, MAX_MESSAGE_SIZE, MPI::CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG);
-	    cout << "Received: " << message << "\n";
 	}
+	cout << "Sent " << i << endl;
+	
 	MPI::Finalize();
     return 0;
 }

@@ -21,7 +21,7 @@ int main (int argc, char* argv[], char** envp) {
     cout << "Hello from server process " << processor_name <<
     	", rank " << world_rank << " of " <<  world_size << " processors\n";
 
-    int count = 100;
+    int count = 10000;
     if (world_rank == 0) {
         char port_name[MPI_MAX_PORT_NAME];
         MPI::Open_port(MPI::INFO_NULL, port_name);

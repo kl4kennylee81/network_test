@@ -21,7 +21,7 @@ void static new_connection (MPI::Intercomm intercom, int count){
         intercom.Recv(buffer, MAX_MESSAGE_SIZE, MPI::CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, status);
 
         int received = status.Get_count(MPI::CHAR);
-        cout << "Received " <<  std::dec << received << " bytes " << endl;
+        // cout << "Received " <<  std::dec << received << " bytes " << endl;
 
         if (received >= 16) {
             if (buffer[12] == '\xd4' && buffer[13] == '\x07') {
