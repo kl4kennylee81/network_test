@@ -4,6 +4,8 @@
 #include <mpi.h>
 #include <thread>
 
+#define MAX_MESSAGE_SIZE 4096
+
 using namespace std;
 
 #define MAX_MESSAGE_SIZE 4096
@@ -14,16 +16,24 @@ void static new_connection (MPI::Intercomm intercom, int count){
 
     while (1){
         char buffer[MAX_MESSAGE_SIZE] = {0};
-        cout << "Waiting for data on thread " << count << endl;
+
         MPI::Status status = MPI::Status();
         intercom.Recv(buffer, MAX_MESSAGE_SIZE, MPI::CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, status);
-        int msgLen = status.Get_count(MPI::CHAR);
-        cout << "Received (" << msgLen << " bytes): " << buffer << "\n";
+
+        int received = status.Get_count(MPI::CHAR);
+        cout << "Received " <<  std::dec << received << " bytes " << endl;
+
+        if (received >= 16) {
+            if (buffer[12] == '\xd4' && buffer[13] == '\x07') {
+                buffer[12] = 1;
+                buffer[13] = 0;
+            }
+        }
+
 
         // send back the recieved message
+        intercom.Send(buffer, received, MPI::CHAR, 0, 0);
 
-        intercom.Send(buffer, msgLen, MPI::CHAR, 0, 0);
-        cout << "im here\n";
     }
 
     intercom.Free();
@@ -60,7 +70,7 @@ int main (int argc, char* argv[]) {
     char port_name[MPI_MAX_PORT_NAME];
     MPI::Open_port(MPI::INFO_NULL, port_name);
 
-    cout << "Port name: " << port_name << "\n";
+    cout << "Port name: " << port_name << endl;
 
     MPI::Publish_name("server", MPI::INFO_NULL, port_name);
 
