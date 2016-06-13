@@ -9,7 +9,7 @@ using namespace std;
 int main (int argc, char* argv[], char** envp) {
 
     /* Initilize execution environment */
-    MPI::Init(argc, argv);
+    MPI::Init();
 
     int world_size = MPI::COMM_WORLD.Get_size();
     int world_rank = MPI::COMM_WORLD.Get_rank();
@@ -42,8 +42,10 @@ int main (int argc, char* argv[], char** envp) {
 
         intercom.Free();
         MPI::Close_port(port_name);
+
     } else {
 
+        sleep(1);
         char port_name[MPI_MAX_PORT_NAME];
         MPI::Lookup_name("server", MPI::INFO_NULL, port_name);
 

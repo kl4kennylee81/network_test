@@ -6,20 +6,23 @@
 
 using namespace std;
 
-
+#define MAX_MESSAGE_SIZE 4096
 //
 // created thread to handle the client
 void static new_connection (MPI::Intercomm intercom, int count){
     cout << "Accepted connection on thread " << count << "\n";
 
     while (1){
-        char buffer[32] = {0};
+        char buffer[MAX_MESSAGE_SIZE] = {0};
         cout << "Waiting for data on thread " << count << endl;
-        intercom.Recv(buffer, 32, MPI::CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG);
-        cout << "Received (" << strlen(buffer) << " bytes): " << buffer << "\n";
+        MPI::Status status = MPI::Status();
+        intercom.Recv(buffer, MAX_MESSAGE_SIZE, MPI::CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, status);
+        int msgLen = status.Get_count(MPI::CHAR);
+        cout << "Received (" << msgLen << " bytes): " << buffer << "\n";
 
         // send back the recieved message
-        intercom.Send(buffer, strlen(buffer) + 1, MPI::CHAR, 0, 0);
+
+        intercom.Send(buffer, msgLen, MPI::CHAR, 0, 0);
         cout << "im here\n";
     }
 
@@ -34,11 +37,13 @@ int main (int argc, char* argv[]) {
     // MPI::Init(argc, argv);
 
     /* Initialize a multithreaded environment */
-    int provided = MPI::Init_thread(argc, argv, MPI::THREAD_MULTIPLE);
-    if (provided < MPI::THREAD_MULTIPLE)
-    {
-        printf("ERROR: The MPI library does not have full thread support\n");
-        MPI::COMM_WORLD.Abort(1);
+    if (!MPI::Is_initialized()) {
+        int provided = MPI::Init_thread(argc, argv, MPI::THREAD_MULTIPLE);
+        if (provided < MPI::THREAD_MULTIPLE)
+        {
+            printf("ERROR: The MPI library does not have full thread support\n");
+            MPI::COMM_WORLD.Abort(1);
+        }
     }
 
     int world_size = MPI::COMM_WORLD.Get_size();

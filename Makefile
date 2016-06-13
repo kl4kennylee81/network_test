@@ -1,13 +1,15 @@
 CC=g++
 CFLAGS=-g -std=c++11 -pthread
+TARGETS=server client singleton
 
-all: server client
+all: $(TARGETS)
 
 server: server.cpp
-	$(CC) $(CFLAGS) server.cpp -o server `pkg-config ompi-c ompi-cxx --cflags --libs`
-
 client: client.cpp
-	$(CC) $(CFLAGS) client.cpp -o client `pkg-config ompi-c ompi-cxx --cflags --libs`
+singleton: singleton.cpp
+
+$(TARGETS):
+	$(CC) $(CFLAGS) $< -o $@ `pkg-config ompi-c ompi-cxx --cflags --libs`
 
 clean:
-	rm server client
+	rm $(TARGETS)
