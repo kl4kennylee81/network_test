@@ -14,7 +14,8 @@ using namespace std;
 void static new_connection (MPI::Intercomm intercom, int count){
     cout << "Accepted connection on thread " << count << "\n";
 
-    while (1){
+    int i;
+    for (i=0; i < 10000; i++){
         char buffer[MAX_MESSAGE_SIZE] = {0};
 
         MPI::Status status = MPI::Status();
@@ -35,6 +36,8 @@ void static new_connection (MPI::Intercomm intercom, int count){
         intercom.Send(buffer, received, MPI::CHAR, 0, 0);
 
     }
+
+    cout << "Done" << endl;
 
     intercom.Free();
 }
@@ -77,11 +80,11 @@ int main (int argc, char* argv[]) {
     int count = 0;
     // loop back to accepting
     while (1) {
-        cout << "Waiting for client " << count << endl;
         MPI::Intercomm intercom = MPI::COMM_SELF.Accept(port_name,MPI::INFO_NULL,0);
-        std::thread t1(new_connection,intercom,count);
+        new_connection(intercom, count);
+        // std::thread t1(new_connection,intercom,count);
 
-        t1.detach();
+        // t1.detach();
         count++;
     }
 
