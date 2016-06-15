@@ -9,7 +9,7 @@ using namespace std;
 int main (int argc, char* argv[], char** envp) {
 
     /* Initilize execution environment */
-    MPI::Init(argc, argv);
+    MPI::Init();
 
     int world_size = MPI::COMM_WORLD.Get_size();
     int world_rank = MPI::COMM_WORLD.Get_rank();
@@ -21,6 +21,7 @@ int main (int argc, char* argv[], char** envp) {
     cout << "Hello from server process " << processor_name <<
     	", rank " << world_rank << " of " <<  world_size << " processors\n";
 
+    int count = 10000;
     if (world_rank == 0) {
         char port_name[MPI_MAX_PORT_NAME];
         MPI::Open_port(MPI::INFO_NULL, port_name);
@@ -37,13 +38,18 @@ int main (int argc, char* argv[], char** envp) {
         cout << "Accepted connection!" << "\n";
 
         char buffer[32] = {0};
-        intercom.Recv(buffer, 32, MPI::CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG);
-        cout << "Received: " << buffer << "\n";
+        int i;
+        for (i=0; i<count; i++) {
+            intercom.Recv(buffer, 32, MPI::CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG);
+        }
+        cout << "Received " << i << "\n";
 
         intercom.Free();
         MPI::Close_port(port_name);
+
     } else {
 
+        usleep(100 * 1000);
         char port_name[MPI_MAX_PORT_NAME];
         MPI::Lookup_name("server", MPI::INFO_NULL, port_name);
 
@@ -55,8 +61,11 @@ int main (int argc, char* argv[], char** envp) {
 
         cout << "Connected!\n";   
 
+        int i;
         const char message[] = "Hello world";
-        server.Send(message, strlen(message) + 1, MPI::CHAR, 0, 0);
+        for (i=0; i<count; i++) {
+            server.Send(message, strlen(message) + 1, MPI::CHAR, 0, 0);
+        }
 
     }
 
