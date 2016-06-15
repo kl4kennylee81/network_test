@@ -24,21 +24,34 @@ void error(const char *msg)
 }
 
 // created thread to handle the client
-void static new_connection (MPI_Comm intercom, int count){
-    while (1){
+void static new_connection (MPI_Comm intercom, int count) {
+    std::cout << "Accepted connection on thread " << count << "\n";
+
+    int i;
+    for (i=0; i < 10000; i++){
         char buffer[MAX_MESSAGE_SIZE] = {0};
+
         MPI_Status status;
         MPI_Recv(buffer, MAX_MESSAGE_SIZE, MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, intercom, &status);
 
-        cout << buffer << endl;
-
         int received;
-        MPI_Get_count(&status,MPI_CHAR, &received);
+        MPI_Get_count(&status, MPI_CHAR, &received);
+        cout << "Received " <<  std::dec << received << " bytes " << endl;
+
+        if (received >= 16) {
+            if (buffer[12] == '\xd4' && buffer[13] == '\x07') {
+                buffer[12] = 1;
+                buffer[13] = 0;
+            }
+        }
+
 
         // send back the recieved message
-        MPI_Send(buffer, received, MPI_CHAR, 0, 0,intercom);
+        MPI_Send(buffer, received, MPI_CHAR, 0, 0, intercom);
 
     }
+
+    std::cout << "Done" << std::endl;
 
     MPI_Comm_free(&intercom);
 }
@@ -76,21 +89,22 @@ int main (int argc, char* argv[]) {
     }
     listen(sockfd,5);
     clilen = sizeof(cli_addr);
-    newsockfd = accept(sockfd, 
-             (struct sockaddr *) &cli_addr, 
-             &clilen);
-    if (newsockfd < 0) 
-        error("ERROR on accept");
+    while (1){
+        newsockfd = accept(sockfd, 
+                 (struct sockaddr *) &cli_addr, 
+                 &clilen);
+        if (newsockfd < 0) 
+            error("ERROR on accept");
 
-    int count = 0;
-    // loop back to accepting
-    MPI_Comm intercom;
-    MPI_Comm_join(newsockfd,&intercom);
+        int count = 0;
+        // loop back to accepting
+        MPI_Comm intercom;
+        MPI_Comm_join(newsockfd,&intercom);
 
-    close(newsockfd);
+        close(newsockfd);
+        new_connection(intercom,count);
+    }
     close(sockfd);
-
-    new_connection(intercom,count);
 
     /* Shutdown */
     MPI_Finalize();

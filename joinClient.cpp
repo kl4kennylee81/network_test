@@ -53,28 +53,30 @@ int main (int argc, char* argv[], char** envp) {
     if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0) 
         error("ERROR connecting");
 
+
+    printf("Connected to the socket\n");
+
 	MPI_Comm serverMPI;
     MPI_Comm_join(sockfd,&serverMPI);
+
+    printf("joined the herd\n");
     close(sockfd);
 
-	size_t buf_size = MAX_MESSAGE_SIZE;
-	char message[MAX_MESSAGE_SIZE] = {0};
-	char* msg_ptr = message;
-	ssize_t bytes_read;
-	while (1){
-		printf("Enter Msg:\n");
-		if ((bytes_read = getline(&msg_ptr, &buf_size, stdin)) == -1) {
-			printf("Error reading from stdin\n");
-			return 1;
-		}
-		MPI_Send(message, bytes_read, MPI_CHAR, 0, 0,serverMPI);
+    int i;
+    int count = 10;
+    char message[MAX_MESSAGE_SIZE] = "Hello world!";
+    for (i = 0; i < count; i++) {
+		MPI_Send(message, strlen(message), MPI_CHAR, 0, 0,serverMPI);
 
-		// this is recieving back the echo
-		memset(message, 0, bytes_read);
         MPI_Status status;
 	    MPI_Recv(message, MAX_MESSAGE_SIZE, MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG,serverMPI,&status);
-	    printf("Received: %s\n",message);
+	    // printf("Received: %s\n",message);
 	}
+
+    printf("hi im done\n");
+
+    MPI_Abort(serverMPI,0);
 	MPI_Finalize();
+    printf("finish finalize\n");
     return 0;
 }
