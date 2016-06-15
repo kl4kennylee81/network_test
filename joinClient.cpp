@@ -24,7 +24,7 @@ void error(const char *msg)
 
 int main (int argc, char* argv[], char** envp) {
 
-	MPI::Init(argc, argv);
+    MPI_Init(&argc, &argv);
 
 	int sockfd, portno, n;
     struct sockaddr_in serv_addr;
@@ -32,7 +32,7 @@ int main (int argc, char* argv[], char** envp) {
 
     char buffer[256];
     if (argc < 3) {
-       fprintf(stderr,"usage %s hostname port\n", argv[0]);
+       fprintf(stderr,"\nusage %s hostname port\n", argv[0]);
        exit(0);
     }
     portno = atoi(argv[2]);
@@ -53,25 +53,28 @@ int main (int argc, char* argv[], char** envp) {
     if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0) 
         error("ERROR connecting");
 
-	MPI::Intracomm serverMPI = MPI::COMM_WORLD.Join(sockfd);
+	MPI_Comm serverMPI;
+    MPI_Comm_join(sockfd,&serverMPI);
+    close(sockfd);
 
 	size_t buf_size = MAX_MESSAGE_SIZE;
 	char message[MAX_MESSAGE_SIZE] = {0};
 	char* msg_ptr = message;
 	ssize_t bytes_read;
 	while (1){
-		cout << "Enter Msg: \n";
+		printf("Enter Msg:\n");
 		if ((bytes_read = getline(&msg_ptr, &buf_size, stdin)) == -1) {
-			cout << "Error reading from stdin\n";
+			printf("Error reading from stdin\n");
 			return 1;
 		}
-		serverMPI.Send(message, bytes_read, MPI::CHAR, 0, 0);
+		MPI_Send(message, bytes_read, MPI_CHAR, 0, 0,serverMPI);
 
 		// this is recieving back the echo
 		memset(message, 0, bytes_read);
-	    serverMPI.Recv(message, MAX_MESSAGE_SIZE, MPI::CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG);
-	    cout << "Received: " << message << "\n";
+        MPI_Status status;
+	    MPI_Recv(message, MAX_MESSAGE_SIZE, MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG,serverMPI,&status);
+	    printf("Received: %s\n",message);
 	}
-	MPI::Finalize();
+	MPI_Finalize();
     return 0;
 }
