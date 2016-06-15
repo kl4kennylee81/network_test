@@ -9,7 +9,7 @@ client: client.cpp
 singleton: singleton.cpp
 
 $(TARGETS):
-	$(CC) $(CFLAGS) $< -o $@ `pkg-config ompi-c ompi-cxx --cflags --libs`
+	$(CC) $(CFLAGS) $< -o $@ `pkg-config mpich --cflags --libs`
 
 clean:
 	rm $(TARGETS)

@@ -2,27 +2,29 @@
  * OpenMPI Echo Server Test
  */
 #include <mpi.h>
+#include <iostream>
 #include <thread>
 
 #define MAX_MESSAGE_SIZE 4096
 
 using namespace std;
 
-#define MAX_MESSAGE_SIZE 4096
+
 //
 // created thread to handle the client
-void static new_connection (MPI::Intercomm intercom, int count){
-    cout << "Accepted connection on thread " << count << "\n";
+void static new_connection (MPI_Comm intercom, int count) {
+    std::cout << "Accepted connection on thread " << count << "\n";
 
     int i;
     for (i=0; i < 10000; i++){
         char buffer[MAX_MESSAGE_SIZE] = {0};
 
-        MPI::Status status = MPI::Status();
-        intercom.Recv(buffer, MAX_MESSAGE_SIZE, MPI::CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, status);
+        MPI_Status status;
+        MPI_Recv(buffer, MAX_MESSAGE_SIZE, MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, intercom, &status);
 
-        int received = status.Get_count(MPI::CHAR);
-        // cout << "Received " <<  std::dec << received << " bytes " << endl;
+        int received;
+        MPI_Get_count(&status, MPI_CHAR, &received);
+        cout << "Received " <<  std::dec << received << " bytes " << endl;
 
         if (received >= 16) {
             if (buffer[12] == '\xd4' && buffer[13] == '\x07') {
@@ -33,13 +35,13 @@ void static new_connection (MPI::Intercomm intercom, int count){
 
 
         // send back the recieved message
-        intercom.Send(buffer, received, MPI::CHAR, 0, 0);
+        MPI_Send(buffer, received, MPI_CHAR, 0, 0, intercom);
 
     }
 
-    cout << "Done" << endl;
+    std::cout << "Done" << std::endl;
 
-    intercom.Free();
+    MPI_Comm_free(&intercom);
 }
 
 
@@ -50,37 +52,28 @@ int main (int argc, char* argv[]) {
     // MPI::Init(argc, argv);
 
     /* Initialize a multithreaded environment */
-    if (!MPI::Is_initialized()) {
-        int provided = MPI::Init_thread(argc, argv, MPI::THREAD_MULTIPLE);
-        if (provided < MPI::THREAD_MULTIPLE)
-        {
-            printf("ERROR: The MPI library does not have full thread support\n");
-            MPI::COMM_WORLD.Abort(1);
-        }
-    }
 
-    int world_size = MPI::COMM_WORLD.Get_size();
+	int provided;
+	MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+	if (provided < MPI_THREAD_MULTIPLE)
+	{
+	    printf("ERROR: The MPI library does not have full thread support\n");
+	    MPI_Abort(MPI_COMM_WORLD, 1);
+	}
 
-    int world_rank = MPI::COMM_WORLD.Get_rank();
-
-    char processor_name[MPI::MAX_PROCESSOR_NAME];
-    int name_len;
-    MPI::Get_processor_name(processor_name, name_len);
-
-    cout << "Hello from server process " << processor_name <<
-    	", rank " << world_rank << " of " <<  world_size << " processors\n";
 
     char port_name[MPI_MAX_PORT_NAME];
-    MPI::Open_port(MPI::INFO_NULL, port_name);
+    MPI_Open_port(MPI_INFO_NULL, port_name);
 
     cout << "Port name: " << port_name << endl;
 
-    MPI::Publish_name("server", MPI::INFO_NULL, port_name);
+    MPI_Publish_name("server", MPI_INFO_NULL, port_name);
 
     int count = 0;
     // loop back to accepting
     while (1) {
-        MPI::Intercomm intercom = MPI::COMM_SELF.Accept(port_name,MPI::INFO_NULL,0);
+        MPI_Comm intercom;
+        MPI_Comm_accept(port_name,MPI_INFO_NULL,0, MPI_COMM_WORLD, &intercom);
         new_connection(intercom, count);
         // std::thread t1(new_connection,intercom,count);
 
@@ -88,10 +81,10 @@ int main (int argc, char* argv[]) {
         count++;
     }
 
-    MPI::Close_port(port_name);
+    MPI_Close_port(port_name);
 
     /* Shutdown */
-    MPI::Finalize();
+    MPI_Finalize();
 
     return 0;
 }
