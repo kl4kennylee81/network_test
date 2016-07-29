@@ -16,8 +16,17 @@ fork: fork.cpp
 $(TARGETS):
 	$(CC) $(CFLAGS) $< -o $@  -I/usr/local/include/ -L/usr/local/lib -lmpi -lmpi_cxx
 
-shmem_server: shmem_server.cpp
-	$(CC) $(CFLAGS) $< -o $@
+SHMEM_SRC=shmem_server.c shmem_stream.c
+SHMEM_OBJ=$(SHMEM_SRC:.c=.o)
 
+
+.c.o:
+	$(CC) $(FLAGS) -c $< -o $@
+
+shmem_server: $(SHMEM_OBJ)
+	$(CC) $(CFLAGS) $(SHMEM_OBJ) -o $@ -lrt
+
+shmem_client: shmem_client.cpp
+	$(CC) $(CFLAGS) $< -o $@ -lrt
 clean:
-	rm $(TARGETS)
+	rm $(TARGETS) $(SHMEM_OBJ)
