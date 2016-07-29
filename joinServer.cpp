@@ -17,6 +17,8 @@
 using std::cout;
 using std::endl;
 
+const char* shutdownCmd = "shutdown";
+
 void error(const char *msg)
 {
     perror(msg);
@@ -30,10 +32,15 @@ void static new_connection (MPI_Comm intercom, int count){
         MPI_Status status;
         MPI_Recv(buffer, MAX_MESSAGE_SIZE, MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, intercom, &status);
 
-        cout << buffer << endl;
+        // cout << buffer << endl;
 
         int received;
         MPI_Get_count(&status,MPI_CHAR, &received);
+
+        if (strcmp(shutdownCmd, buffer) == 0) {
+            cout << "Received shutdown on thread " << count << endl;
+            return;
+        }
 
         // send back the recieved message
         MPI_Send(buffer, received, MPI_CHAR, 0, 0,intercom);
@@ -53,6 +60,11 @@ int main (int argc, char* argv[]) {
     /* Initialize a multithreaded environment */
     int provided;
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+
+    MPI_Group serverGroup;
+    MPI_Comm serverComm;
+    MPI_Comm_dup(MPI_COMM_WORLD, &serverComm);
+    MPI_Comm_group(serverComm, &serverGroup);
 
     int sockfd, newsockfd, portno;
     socklen_t clilen;
@@ -76,21 +88,36 @@ int main (int argc, char* argv[]) {
     }
     listen(sockfd,5);
     clilen = sizeof(cli_addr);
-    newsockfd = accept(sockfd, 
+
+    // loop back to accepting
+    int count = 0;
+    while (1) {
+        newsockfd = accept(sockfd, 
              (struct sockaddr *) &cli_addr, 
              &clilen);
-    if (newsockfd < 0) 
-        error("ERROR on accept");
+        if (newsockfd < 0) 
+            error("ERROR on accept");
 
-    int count = 0;
-    // loop back to accepting
-    MPI_Comm intercom;
-    MPI_Comm_join(newsockfd,&intercom);
+        std::cout << "Accepted connection " << count << std::endl;
+
+        MPI_Comm intercom;
+        MPI_Comm_join(newsockfd, &intercom);
+
+        MPI_Group newGroup;
+        MPI_Group group;
+        MPI_Comm_group(intercom, &group);
+        MPI_Group_union(group, serverGroup, &newGroup);
+        serverGroup = newGroup;
+
+        std::thread t1(new_connection, intercom, count);
+
+        t1.detach();
+        count++;
+    }    // loop back to accepting
+
 
     close(newsockfd);
     close(sockfd);
-
-    new_connection(intercom,count);
 
     /* Shutdown */
     MPI_Finalize();

@@ -22,6 +22,42 @@ void error(const char *msg)
     exit(0);
 }
 
+void sendN(MPI_Comm server, int n) {
+    int i;
+    char message[MAX_MESSAGE_SIZE] = "Hello world!";
+    for (i = 0; i < n; i++) {
+        MPI_Send(message, strlen(message), MPI_CHAR, 0, 0, server);
+
+        // this is recieving back the echo
+        MPI_Recv(message, MAX_MESSAGE_SIZE, MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, server, NULL);
+    }
+    cout << "Sent " << i << endl;
+
+}
+
+void acceptUserInput(MPI_Comm server) {
+
+    size_t buf_size = MAX_MESSAGE_SIZE;
+    char message[MAX_MESSAGE_SIZE] = {0};
+    char* msg_ptr = message;
+    ssize_t bytes_read;
+    while (1){
+        printf("Enter Msg:\n");
+        if ((bytes_read = getline(&msg_ptr, &buf_size, stdin)) == -1) {
+            printf("Error reading from stdin\n");
+            return;
+        }
+        MPI_Send(message, bytes_read, MPI_CHAR, 0, 0, server);
+
+        // this is recieving back the echo
+        memset(message, 0, bytes_read);
+        MPI_Status status;
+        MPI_Recv(message, MAX_MESSAGE_SIZE, MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, server ,&status);
+        printf("Received: %s\n",message);
+    }
+
+}
+
 int main (int argc, char* argv[], char** envp) {
 
     MPI_Init(&argc, &argv);
@@ -53,28 +89,18 @@ int main (int argc, char* argv[], char** envp) {
     if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0) 
         error("ERROR connecting");
 
-	MPI_Comm serverMPI;
-    MPI_Comm_join(sockfd,&serverMPI);
+    printf("Connected\n");
+
+	MPI_Comm mpiServer;
+    MPI_Comm_join(sockfd,&mpiServer);
     close(sockfd);
 
-	size_t buf_size = MAX_MESSAGE_SIZE;
-	char message[MAX_MESSAGE_SIZE] = {0};
-	char* msg_ptr = message;
-	ssize_t bytes_read;
-	while (1){
-		printf("Enter Msg:\n");
-		if ((bytes_read = getline(&msg_ptr, &buf_size, stdin)) == -1) {
-			printf("Error reading from stdin\n");
-			return 1;
-		}
-		MPI_Send(message, bytes_read, MPI_CHAR, 0, 0,serverMPI);
+    printf("Joined\n");
 
-		// this is recieving back the echo
-		memset(message, 0, bytes_read);
-        MPI_Status status;
-	    MPI_Recv(message, MAX_MESSAGE_SIZE, MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG,serverMPI,&status);
-	    printf("Received: %s\n",message);
-	}
+    sendN(mpiServer, 10000);
+    const char* shutdown = "shutdown";
+    MPI_Send(shutdown, strlen(shutdown), MPI_CHAR, 0, 0, mpiServer);
+
 	MPI_Finalize();
     return 0;
 }

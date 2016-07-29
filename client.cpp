@@ -14,9 +14,9 @@ int main (int argc, char* argv[], char** envp) {
 
 	MPI_Init(&argc, &argv);
 
-	char port_name[MPI_MAX_PORT_NAME];
-	MPI_Lookup_name("server", MPI_INFO_NULL, port_name);
-    // char* port_name = argv[1];
+	// char port_name[MPI_MAX_PORT_NAME];
+	// MPI_Lookup_name("server", MPI_INFO_NULL, port_name);
+    char* port_name = argv[1];
 
 	cout << "Using port " << port_name << "\n";
 

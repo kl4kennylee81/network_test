@@ -24,7 +24,7 @@ void static new_connection (MPI_Comm intercom, int count) {
 
         int received;
         MPI_Get_count(&status, MPI_CHAR, &received);
-        cout << "Received " <<  std::dec << received << " bytes " << endl;
+        // cout << "Received " <<  std::dec << received << " bytes " << endl;
 
         if (received >= 16) {
             if (buffer[12] == '\xd4' && buffer[13] == '\x07') {
@@ -61,6 +61,12 @@ int main (int argc, char* argv[]) {
 	    MPI_Abort(MPI_COMM_WORLD, 1);
 	}
 
+    /* Duplicate the global communicator, get its group, add new clients to the global group */
+    MPI_Group serverGroup;
+    MPI_Comm serverComm;
+    MPI_Comm_dup(MPI_COMM_WORLD, &serverComm);
+    MPI_Comm_group(serverComm, &serverGroup);
+
 
     char port_name[MPI_MAX_PORT_NAME];
     MPI_Open_port(MPI_INFO_NULL, port_name);
@@ -70,14 +76,21 @@ int main (int argc, char* argv[]) {
     MPI_Publish_name("server", MPI_INFO_NULL, port_name);
 
     int count = 0;
-    // loop back to accepting
     while (1) {
         MPI_Comm intercom;
-        MPI_Comm_accept(port_name,MPI_INFO_NULL,0, MPI_COMM_WORLD, &intercom);
-        new_connection(intercom, count);
-        // std::thread t1(new_connection,intercom,count);
+        MPI_Group group;
+        MPI_Comm_accept(port_name,MPI_INFO_NULL,0, serverComm, &intercom);
 
-        // t1.detach();
+        /* Add the new communicator's group to our global group. */
+        MPI_Group newGroup;
+        MPI_Comm_group(intercom, &group);
+        MPI_Group_union(group, serverGroup, &newGroup);
+        serverGroup = newGroup;
+
+        new_connection(intercom, count);
+        std::thread t1(new_connection,intercom,count);
+
+        t1.detach();
         count++;
     }
 
