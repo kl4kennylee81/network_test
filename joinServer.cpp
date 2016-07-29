@@ -26,16 +26,27 @@ void error(const char *msg)
 }
 
 // created thread to handle the client
-void static new_connection (MPI_Comm intercom, int count){
-    while (1){
+void static new_connection (MPI_Comm intercom, int count) {
+    std::cout << "Accepted connection on thread " << count << "\n";
+
+    int i;
+    for (i=0; i < 10000; i++){
         char buffer[MAX_MESSAGE_SIZE] = {0};
+
         MPI_Status status;
         MPI_Recv(buffer, MAX_MESSAGE_SIZE, MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, intercom, &status);
 
-        // cout << buffer << endl;
-
         int received;
-        MPI_Get_count(&status,MPI_CHAR, &received);
+        MPI_Get_count(&status, MPI_CHAR, &received);
+        cout << "Received " <<  std::dec << received << " bytes " << endl;
+
+        if (received >= 16) {
+            if (buffer[12] == '\xd4' && buffer[13] == '\x07') {
+                buffer[12] = 1;
+                buffer[13] = 0;
+            }
+        }
+
 
         if (strcmp(shutdownCmd, buffer) == 0) {
             cout << "Received shutdown on thread " << count << endl;
@@ -43,9 +54,11 @@ void static new_connection (MPI_Comm intercom, int count){
         }
 
         // send back the recieved message
-        MPI_Send(buffer, received, MPI_CHAR, 0, 0,intercom);
+        MPI_Send(buffer, received, MPI_CHAR, 0, 0, intercom);
 
     }
+
+    std::cout << "Done" << std::endl;
 
     MPI_Comm_free(&intercom);
 }

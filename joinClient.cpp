@@ -102,5 +102,6 @@ int main (int argc, char* argv[], char** envp) {
     MPI_Send(shutdown, strlen(shutdown), MPI_CHAR, 0, 0, mpiServer);
 
 	MPI_Finalize();
+    printf("finish finalize\n");
     return 0;
 }
