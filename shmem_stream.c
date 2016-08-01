@@ -3,10 +3,6 @@
 
 int _shm_counter = 0;
 
-int shm_format_name(char* prefix) {
-
-}
-
 int shmem_create(char* name, size_t len, int* fd, void** addr) {
 
   int ec = 0;
@@ -145,7 +141,7 @@ int shmem_stream_connect(char* server_name, shmem_stream_t* stream) {
                 return 1;
         }
 
-	// Take lock, set name, signal accept
+	// Take lock, make local control block, set name, signal accept
 	pthread_mutex_lock(&acceptor->accept_mutex);
 
 	char name[MAX_SHM_KEY_LEN + 1];
@@ -158,6 +154,19 @@ int shmem_stream_connect(char* server_name, shmem_stream_t* stream) {
 
         strncpy(acceptor->client_control, name, MAX_SHM_KEY_LEN + 1); 
         strncpy(stream->control->name, name, MAX_SHM_KEY_LEN + 1); 
+
+	shmem_control_t* mem_control = stream->control;
+
+	pthread_mutexattr_t attr;
+	pthread_mutexattr_init(&attr);
+	pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
+	pthread_mutex_init(&mem_control->mutex, &attr);
+
+	pthread_condattr_t condattr;
+	pthread_condattr_init(&condattr);
+	pthread_condattr_setpshared(&condattr, PTHREAD_PROCESS_SHARED);
+	pthread_cond_init(&mem_control->read_cond, &condattr);
+	pthread_cond_init(&mem_control->write_cond, &condattr);
 
 	pthread_cond_signal(&acceptor->accept_cond);
 

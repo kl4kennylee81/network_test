@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <iostream>
 #include <string.h>
+#include <stdlib.h>
 
 #include "shmem_stream.h"
 
@@ -26,7 +27,16 @@ int main(int argc, char* argv[]) {
 
 		shmem_stream_send(&stream, (char*) &size, sizeof(size));
 		shmem_stream_send(&stream, message, size);
+		
+		int recv;
+		char* recvMsg = (char*) malloc (recv);
+		shmem_stream_recv(&stream, (char*) &recv, sizeof(recv));
+		shmem_stream_recv(&stream, recvMsg, recv);
 
+		printf("Received: %s\n", recvMsg);
+		if (strcmp(message, recvMsg)) {
+			printf("  Bad response!\n");
+		}
 	}
 	shmem_stream_close(&stream);
 }

@@ -15,6 +15,8 @@ void handle_connection(shmem_stream_t* stream) {
 			shmem_stream_recv(stream, buffer, size);
 			printf("%s\n", buffer);
 		}
+		shmem_stream_send(stream, (char*) &size, sizeof(size));
+		shmem_stream_send(stream, buffer, size);
 		if (strcmp("shutdown", buffer) == 0)
 			break;
 	}
