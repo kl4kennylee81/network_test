@@ -1,38 +1,118 @@
 
 #include "shmem_stream.h"
 
-int shmem_stream_listen(char* name, shmem_stream_t* stream) {
+int _shm_counter = 0;
+
+int shm_format_name(char* prefix) {
+
+}
+
+int shmem_create(char* name, size_t len, int* fd, void** addr) {
+
   int ec = 0;
-  strncpy(stream->name, name, MAX_SHM_KEY_LEN);
+  
   int shmem_fd = shm_open(name, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
   if (shmem_fd < 0) {
-    printf("Error opening shared memory: %s\n", strerror(errno));
+    printf("Error opening shared memory %s: %s\n", name, strerror(errno));
     return 1;
   }
-  stream->fd = shmem_fd;
+  *fd = shmem_fd;
 
-  int mem_lenth = sizeof(shmem_control_t);
-  if ((ec = ftruncate(shmem_fd, mem_lenth))) {
-      printf("Unable to resize memory to %d bytes: %s\n", mem_lenth, strerror(errno));
+  if ((ec = ftruncate(shmem_fd, len))) {
+      printf("Unable to resize memory to %lu bytes: %s\n", len, strerror(errno));
       return 1;
   }
 
-  shmem_control_t* mem_control;
-  mem_control = (shmem_control_t*) mmap(NULL, mem_lenth, PROT_READ | PROT_WRITE,
-                                        MAP_SHARED, shmem_fd, 0);
+  *addr = mmap(NULL, len, PROT_READ | PROT_WRITE,
+              MAP_SHARED, shmem_fd, 0);
 
-  if (mem_control == NULL) {
+  if (*addr == NULL) {
       printf("Unable to mmap memory: %s\n", strerror(errno));
       return 1;
   }
-  stream->control = mem_control;
+  return 0;
+}
+
+int shmem_open(char* name, size_t len, int* fd, void** addr) {
+	int ec;
+        int shmem_fd = shm_open(name, O_RDWR, S_IRWXU | S_IRWXG);
+        if (shmem_fd < 0) {
+		printf("Unable to open shared memory: %s\n", strerror(errno));
+                return 1;
+        }
+	*fd = shmem_fd;
+        *addr = mmap(NULL, len, PROT_READ | PROT_WRITE,
+                    MAP_SHARED, shmem_fd, 0);
+
+        if (*addr == NULL) {
+                printf("Unable to mmap memory: %s\n", strerror(errno));
+                return 1;
+        }
+	return 0;
+}
+
+int shmem_stream_listen(char* name, shmem_acceptor_t** acceptor_ptr) {
+
+	int fd;
+	if (shmem_create(name, sizeof(shmem_acceptor_t), &fd, (void**) acceptor_ptr)) {
+		return 1;
+	}	
+
+	shmem_acceptor_t* acceptor = *acceptor_ptr;
+	strncpy(acceptor->name, name, MAX_SHM_KEY_LEN);
+
+	pthread_mutexattr_t attr;
+	pthread_mutexattr_init(&attr);
+	pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
+	pthread_mutex_init(&acceptor->accept_mutex, &attr);
+
+	pthread_condattr_t condattr;
+	pthread_condattr_init(&condattr);
+	pthread_condattr_setpshared(&condattr, PTHREAD_PROCESS_SHARED);
+
+	pthread_cond_init(&acceptor->ready_cond, &condattr);
+	pthread_cond_init(&acceptor->accept_cond, &condattr);
+
+	pthread_mutex_lock(&acceptor->accept_mutex);
+	acceptor->ready = true;
+	acceptor->client_control[0] = '\0';
+	acceptor->server_control[0] = '\0';
+	pthread_mutex_unlock(&acceptor->accept_mutex);
+
+}
+
+
+int shmem_stream_accept(shmem_acceptor_t* acceptor, shmem_stream_t* stream) {
+ 
+  // Wait for accept_cond
+  pthread_mutex_lock(&acceptor->accept_mutex);
+  while (strlen(acceptor->client_control)  == 0) {
+	pthread_cond_wait(&acceptor->accept_cond, &acceptor->accept_mutex);
+  }
+
+  // Open remote control block
+  if (shmem_open(acceptor->client_control, sizeof(shmem_control_t), &stream->dest_fd, (void**) &stream->dest_control)) {
+    pthread_mutex_unlock(&acceptor->accept_mutex);
+    return 1;
+  }
+  
+  // Construct local control block 
+  char name[MAX_SHM_KEY_LEN + 1];
+  sprintf(name, "%s-%d-%d", acceptor->name, getpid(), _shm_counter++);
+  if (shmem_create(name, sizeof(shmem_control_t), &stream->fd, (void**) &stream->control)) {
+    printf("Error intializing shared memory for control block\n");
+    pthread_mutex_unlock(&acceptor->accept_mutex);
+    return 1;
+  }
+  strncpy(stream->control->name, name, MAX_SHM_KEY_LEN);
+  strncpy(acceptor->server_control, name, MAX_SHM_KEY_LEN);
+  
+  shmem_control_t* mem_control = stream->control;
 
   pthread_mutexattr_t attr;
   pthread_mutexattr_init(&attr);
   pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
-
   pthread_mutex_init(&mem_control->mutex, &attr);
-
 
   pthread_condattr_t condattr;
   pthread_condattr_init(&condattr);
@@ -40,122 +120,145 @@ int shmem_stream_listen(char* name, shmem_stream_t* stream) {
   pthread_cond_init(&mem_control->read_cond, &condattr);
   pthread_cond_init(&mem_control->write_cond, &condattr);
 
-  pthread_mutex_lock(&mem_control->mutex);
-  mem_control->ready = 1;
-  pthread_mutex_unlock(&mem_control->mutex);
-  return ec;
+  // Signal to client we are ready
+  acceptor->ready = true;
+  pthread_cond_signal(&acceptor->ready_cond);
+  pthread_mutex_unlock(&acceptor->accept_mutex);
+  return 0;
 }
 
-int shmem_stream_connect(char* name, shmem_stream_t* stream) {
-	int ec;
-        int shmem_fd = shm_open(name, O_RDWR, S_IRWXU | S_IRWXG);
-	strncpy(stream->name, name, MAX_SHM_KEY_LEN);
-        if (shmem_fd < 0) {
-		printf("Unable to open shared memory: %s\n", strerror(errno));
-                return 1;
-        }
-	stream->fd = shmem_fd;
+int shmem_stream_connect(char* server_name, shmem_stream_t* stream) {
 
-        int mem_lenth = sizeof(shmem_control_t);
-
-        shmem_control_t* mem_control;
-        mem_control = (shmem_control_t*) mmap(NULL, mem_lenth, PROT_READ | PROT_WRITE,
-                                              MAP_SHARED, shmem_fd, 0);
-
-        if (mem_control == NULL) {
-                printf("Unable to mmap memory: %s\n", strerror(errno));
-                return 1;
-        }
-	stream->control = mem_control;
-
-        if (!mem_control->ready) {
-                printf("memory control block not ready!");
-                return 1;
-        } 
-	return 0;
-}
-
-int shmem_stream_write(shmem_stream_t* stream, const char* buffer, size_t len) {
-	pthread_mutex_lock(&stream->control->mutex);
-	
-	while (stream->control->length + len > MAX_BUFFER_LEN) {
-		pthread_cond_wait(&stream->control->write_cond, &stream->control->mutex);
-	}
-
-	int cursor = stream->control->write_cursor;
-	if (cursor + len > MAX_BUFFER_LEN) {
-		printf("I can't write past end of buffer!");
-		pthread_mutex_unlock(&stream->control->mutex);
+	// Open acceptor block
+	int fd;
+	shmem_acceptor_t* acceptor;
+	if (shmem_open(server_name, sizeof(shmem_acceptor_t), &fd, (void**) &acceptor)) {
 		return 1;
 	}
-	memcpy(&stream->control->ring_buffer[cursor], buffer, len);
-	cursor += len;
-	stream->control->write_cursor = cursor;
-	stream->control->length += len;
-	pthread_cond_signal(&stream->control->read_cond);
-	pthread_mutex_unlock(&stream->control->mutex);
+
+	if (!acceptor->ready) {
+                printf("acceptor control block not ready!");
+                return 1;
+        }
+
+	// Take lock, set name, signal accept
+	pthread_mutex_lock(&acceptor->accept_mutex);
+
+	char name[MAX_SHM_KEY_LEN + 1];
+	sprintf(name, "%s-%d-%d", server_name, getpid(), _shm_counter++);
+	if (shmem_create(name, sizeof(shmem_control_t), &stream->fd, (void**) &stream->control)) {
+		printf("Error intializing shared memory for control block\n");
+		pthread_mutex_unlock(&acceptor->accept_mutex);
+		return 1;
+	} 	
+
+        strncpy(acceptor->client_control, name, MAX_SHM_KEY_LEN + 1); 
+        strncpy(stream->control->name, name, MAX_SHM_KEY_LEN + 1); 
+
+	pthread_cond_signal(&acceptor->accept_cond);
+
+	while (strlen(acceptor->server_control) == 0) {
+		pthread_cond_wait(&acceptor->ready_cond, &acceptor->accept_mutex);
+	}
+
+	if (shmem_open(acceptor->server_control, sizeof(shmem_control_t), &stream->dest_fd, (void**) &stream->dest_control)) {
+		return 1;
+	}
+
 	return 0;
 }
 
-int shmem_stream_read(shmem_stream_t* stream, char* buffer, size_t len) {
+int shmem_stream_recv(shmem_stream_t* stream, char* buffer, size_t len) {
+	return shmem_stream_control_read(stream->control, buffer, len);
+}
+
+int shmem_stream_send(shmem_stream_t* stream, char* buffer, size_t len) {
+	return shmem_stream_control_write(stream->dest_control, buffer, len);
+}
+
+int shmem_stream_control_write(shmem_control_t* control, const char* buffer, size_t len) {
+	pthread_mutex_lock(&control->mutex);
+	
+	while (control->length + len > MAX_BUFFER_LEN) {
+		pthread_cond_wait(&control->write_cond, &control->mutex);
+	}
+
+	int cursor = control->write_cursor;
+	if (cursor + len > MAX_BUFFER_LEN) {
+		printf("I can't write past end of buffer!");
+		pthread_mutex_unlock(&control->mutex);
+		return 1;
+	}
+	memcpy(&control->ring_buffer[cursor], buffer, len);
+	cursor += len;
+	control->write_cursor = cursor;
+	control->length += len;
+	pthread_cond_signal(&control->read_cond);
+	pthread_mutex_unlock(&control->mutex);
+	return 0;
+}
+
+int shmem_stream_control_read(shmem_control_t* control, char* buffer, size_t len) {
         char* peek;
-	if (shmem_stream_peek(stream, &peek, len)) {
+	if (shmem_stream_control_peek(control, &peek, len)) {
 		return 1;
 	}
 	memcpy(buffer, peek, len);
-	if (shmem_stream_advance(stream, len)) {
+	if (shmem_stream_control_advance(control, len)) {
 		return 1;
 	}
 	return 0;
 }
 
 
-int shmem_stream_peek(shmem_stream_t* stream, char** buffer, size_t len) {
-	pthread_mutex_lock(&stream->control->mutex);
+int shmem_stream_control_peek(shmem_control_t* control, char** buffer, size_t len) {
+	pthread_mutex_lock(&control->mutex);
 
-        while (stream->control->length < len) {
-                pthread_cond_wait(&stream->control->read_cond, &stream->control->mutex);
+        while (control->length < len) {
+                pthread_cond_wait(&control->read_cond, &control->mutex);
         }
-        if (len + stream->control->read_cursor > MAX_BUFFER_LEN) {
+        if (len + control->read_cursor > MAX_BUFFER_LEN) {
 		printf("Oops. Can't read past end of buffer yet. Implement an iovec\n");
-		pthread_mutex_unlock(&stream->control->mutex);
+		pthread_mutex_unlock(&control->mutex);
 		return -1;
         }
-	*buffer = &stream->control->ring_buffer[stream->control->read_cursor];
-        pthread_mutex_unlock(&stream->control->mutex);  
+	*buffer = &control->ring_buffer[control->read_cursor];
+        pthread_mutex_unlock(&control->mutex);  
 	return 0;
 }
 
-int shmem_stream_advance(shmem_stream_t* stream, size_t len) {
-	pthread_mutex_lock(&stream->control->mutex);
-	int cursor = stream->control->read_cursor + len;
+int shmem_stream_control_advance(shmem_control_t* control, size_t len) {
+	pthread_mutex_lock(&control->mutex);
+	int cursor = control->read_cursor + len;
 	if (cursor >= MAX_BUFFER_LEN) {
 		cursor -= MAX_BUFFER_LEN;
 	}
-        if (cursor > stream->control->write_cursor) {
+        if (cursor > control->write_cursor) {
 		printf("Oops. Can't advance past write cursor!\n");
-		pthread_mutex_unlock(&stream->control->mutex);
+		pthread_mutex_unlock(&control->mutex);
 		return 1;
         }
-	if (len > stream->control->length) {
+	if (len > control->length) {
 		printf("can't advance more than length!\n");
-		pthread_mutex_unlock(&stream->control->mutex);
+		pthread_mutex_unlock(&control->mutex);
 		return 1;
 	}
-	stream->control->length -= len;
-	stream->control->read_cursor = cursor;
-	pthread_cond_signal(&stream->control->write_cond);
-	pthread_mutex_unlock(&stream->control->mutex);
+	control->length -= len;
+	control->read_cursor = cursor;
+	pthread_cond_signal(&control->write_cond);
+	pthread_mutex_unlock(&control->mutex);
 	return 0;
 }
 
-int shmem_stream_shutdown(shmem_stream_t* stream) {
-  shm_unlink(stream->name);
-  close(stream->fd);
+int shmem_stream_shutdown(shmem_acceptor_t* acceptor) {
+  close(acceptor->fd);
+  shm_unlink(acceptor->name);
   return 0;
 }
 
 int shmem_stream_close(shmem_stream_t* stream) {
+  shm_unlink(stream->control->name);
   close(stream->fd);
+  close(stream->dest_fd);
   return 0;
 }

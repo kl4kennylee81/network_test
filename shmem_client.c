@@ -22,8 +22,8 @@ int main(int argc, char* argv[]) {
 	char* message = argv[1];
 	int size = strlen(message);
 
-	shmem_stream_write(&stream, (char*) &size, sizeof(size));
-	shmem_stream_write(&stream, message, size);
+	shmem_stream_send(&stream, (char*) &size, sizeof(size));
+	shmem_stream_send(&stream, message, size);
 	
 	shmem_stream_close(&stream);
 }
