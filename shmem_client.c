@@ -16,8 +16,14 @@ int main(int argc, char* argv[]) {
 		printf("Unable to connect to server!\n");
         }
 
-	const char* message = "Hello world!";
-	shmem_stream_write(&stream, message, strlen(message));
+	if (argc < 2)
+		return 1;
 
+	char* message = argv[1];
+	int size = strlen(message);
+
+	shmem_stream_write(&stream, (char*) &size, sizeof(size));
+	shmem_stream_write(&stream, message, size);
+	
 	shmem_stream_close(&stream);
 }
