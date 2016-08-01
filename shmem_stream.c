@@ -37,7 +37,7 @@ int shmem_open(char* name, size_t len, int* fd, void** addr) {
 	int ec;
         int shmem_fd = shm_open(name, O_RDWR, S_IRWXU | S_IRWXG);
         if (shmem_fd < 0) {
-		printf("Unable to open shared memory: %s\n", strerror(errno));
+		printf("Unable to open shared memory %s: %s\n", name, strerror(errno));
                 return 1;
         }
 	*fd = shmem_fd;
@@ -92,10 +92,14 @@ int shmem_stream_accept(shmem_acceptor_t* acceptor, shmem_stream_t* stream) {
 
   // Open remote control block
   if (shmem_open(acceptor->client_control, sizeof(shmem_control_t), &stream->dest_fd, (void**) &stream->dest_control)) {
+    acceptor->client_control[0] = '\0';
     pthread_mutex_unlock(&acceptor->accept_mutex);
     return 1;
   }
-  
+
+  // Null out for future connections
+  acceptor->client_control[0] = '\0';
+
   // Construct local control block 
   char name[MAX_SHM_KEY_LEN + 1];
   sprintf(name, "%s-%d-%d", acceptor->name, getpid(), _shm_counter++);
@@ -162,8 +166,13 @@ int shmem_stream_connect(char* server_name, shmem_stream_t* stream) {
 	}
 
 	if (shmem_open(acceptor->server_control, sizeof(shmem_control_t), &stream->dest_fd, (void**) &stream->dest_control)) {
+		pthread_mutex_unlock(&acceptor->accept_mutex);
+		acceptor->server_control[0] = '\0';
 		return 1;
 	}
+
+	acceptor->server_control[0] = '\0';
+	pthread_mutex_unlock(&acceptor->accept_mutex);
 
 	return 0;
 }
