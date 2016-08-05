@@ -8,18 +8,29 @@
 void handle_connection(shmem_stream_t* stream) {
 	while (1) {
 		int size;
-		shmem_stream_recv(stream, (char*) &size, sizeof(size));
+		int ec;
+		ec = shmem_stream_recv(stream, (char*) &size, sizeof(size));
+		if (ec)
+			break;
                 char buffer[1024] = {0};
 		printf("Reading %d bytes\n", size);
 		if (size < sizeof(buffer)) {
-			shmem_stream_recv(stream, buffer, size);
+			ec = shmem_stream_recv(stream, buffer, size);
+			if (ec)
+				break;
 			printf("%s\n", buffer);
 		}
-		shmem_stream_send(stream, (char*) &size, sizeof(size));
-		shmem_stream_send(stream, buffer, size);
+		ec = shmem_stream_send(stream, (char*) &size, sizeof(size));
+		if (ec)	
+			break;
+		ec = shmem_stream_send(stream, buffer, size);
+		if (ec)
+			break;
+
 		if (strcmp("shutdown", buffer) == 0)
 			break;
 	}
+	printf("Closing connection\n");
         shmem_stream_close(stream);
 	free(stream);
 }
@@ -30,6 +41,7 @@ int main(int argc, char* argv[]) {
 	int ec = shmem_stream_listen("/server", &acceptor);
         if (ec) {
           printf("Unable to open server acceptor\n");
+	  return 1;
         }
 
 

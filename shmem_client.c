@@ -10,15 +10,16 @@
 #include "shmem_stream.h"
 
 int main(int argc, char* argv[]) {
-	
+
+
+	if (argc < 2)
+		return 1;
+
         shmem_stream_t stream;
 	int ec = shmem_stream_connect("/server", &stream);
 	if (ec) {
 		printf("Unable to connect to server!\n");
         }
-
-	if (argc < 2)
-		return 1;
 
 	int i;
 	for(i = 1; i < argc; i++) {
@@ -29,14 +30,16 @@ int main(int argc, char* argv[]) {
 		shmem_stream_send(&stream, message, size);
 		
 		int recv;
-		char* recvMsg = (char*) malloc (recv);
 		shmem_stream_recv(&stream, (char*) &recv, sizeof(recv));
+		printf("Receiving %d bytes...\n", recv);
+		char* recvMsg = (char*) calloc (recv, 1);
 		shmem_stream_recv(&stream, recvMsg, recv);
 
-		printf("Received: %s\n", recvMsg);
+		printf("  received: %s\n", recvMsg);
 		if (strcmp(message, recvMsg)) {
 			printf("  Bad response!\n");
 		}
+		free (recvMsg);
 	}
 	shmem_stream_close(&stream);
 }
