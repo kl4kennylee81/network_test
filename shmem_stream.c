@@ -223,6 +223,7 @@ int shmem_stream_control_write(shmem_control_t* control, const char* buffer, siz
 
             if (!control->open) {
 	        	pthread_mutex_unlock(&control->mutex);
+			printf("Connection has been closed\n");
 	        	return SHMEM_ERR_CLOSED;
 	        }
     	}
@@ -233,13 +234,12 @@ int shmem_stream_control_write(shmem_control_t* control, const char* buffer, siz
 			is the space to the read cursor */
 	    size_t write_space;
 	    if (control->read_cursor > cursor) {
-	    	write_space = cursor - control->read_cursor;
+	    	write_space = control->read_cursor - cursor;
 	    } else {
 	    	write_space = SHMEM_MAX_BUF_LEN - cursor;
 	    }
-	    size_t to_write = (write_space < len) ? write_space : len;
+	    size_t to_write = (write_space < (len - bytes_written)) ? write_space : (len - bytes_written);
 
-	printf("Writing %d bytes at offset %d\n", to_write, cursor);
 	    memcpy(&control->ring_buffer[cursor], &buffer[bytes_written], to_write);
 	    bytes_written += to_write;
 	    control->length += to_write;
@@ -266,6 +266,7 @@ int shmem_stream_control_read(shmem_control_t* control, char* buffer, size_t len
 
 	        if (!control->open) {
 	        	pthread_mutex_unlock(&control->mutex);
+			printf("Connection has been closed\n");
 	        	return SHMEM_ERR_CLOSED;
 	        }
 	    }
@@ -276,9 +277,8 @@ int shmem_stream_control_read(shmem_control_t* control, char* buffer, size_t len
 	    } else {
 	    	read_space = SHMEM_MAX_BUF_LEN - cursor;
 	    }
-	    size_t to_read = (read_space < len) ? read_space : len;
+	    size_t to_read = (read_space < (len - bytes_read)) ? read_space : (len - bytes_read);
 
-	printf("Reading %d bytes at offset %d\n", to_read, cursor);
 	    memcpy(&buffer[bytes_read], &control->ring_buffer[cursor], to_read);
 	    bytes_read += to_read;
 	    control->length -= to_read;

@@ -1,5 +1,7 @@
-CC=g++
-CFLAGS=-g -std=c++11 -pthread
+CC=gcc
+CFLAGS=-g -pthread
+CXX=g++
+CXXFLAGS=-g -std=c++11 -pthread 
 TARGETS=server client singleton joinClient joinServer spawn child 
 
 all: $(TARGETS) shmem_server
@@ -14,7 +16,7 @@ child: child.cpp
 fork: fork.cpp
 
 $(TARGETS):
-	$(CC) $(CFLAGS) $< -o $@  -I/usr/local/include/ -L/usr/local/lib -lmpi -lmpi_cxx
+	$(CXX) $(CXXFLAGS) $< -o $@  -I/usr/local/include/ -L/usr/local/lib -lmpi -lmpi_cxx
 
 SHMEM_SRC=shmem_server.c shmem_client.c
 SHMEM_OBJ=$(SHMEM_SRC:.c=.o)

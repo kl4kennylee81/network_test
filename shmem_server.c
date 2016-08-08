@@ -12,13 +12,15 @@ void handle_connection(shmem_stream_t* stream) {
 		ec = shmem_stream_recv(stream, (char*) &size, sizeof(size));
 		if (ec)
 			break;
-                char buffer[1024] = {0};
+                char buffer[8192] = {0};
 		printf("Reading %d bytes\n", size);
 		if (size < sizeof(buffer)) {
 			ec = shmem_stream_recv(stream, buffer, size);
 			if (ec)
 				break;
 			printf("%s\n", buffer);
+		} else {
+			continue;
 		}
 		ec = shmem_stream_send(stream, (char*) &size, sizeof(size));
 		if (ec)	
