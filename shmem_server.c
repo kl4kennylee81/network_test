@@ -50,6 +50,7 @@ int main(int argc, char* argv[]) {
 	while (1) {
         	printf("Listening...\n");
 		shmem_stream_t* stream = (shmem_stream_t*) malloc(sizeof(shmem_stream_t));
+		stream->timeout = 0;
 		ec = shmem_stream_accept(acceptor, stream);
 		if (ec) {
 		  printf("Unable to accept connection\n");

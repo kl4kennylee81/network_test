@@ -7,6 +7,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #define SHMEM_MAX_KEY_LEN 255
@@ -22,6 +23,8 @@
 #define SHMEM_ERR_RESIZE 3
 #define SHMEM_ERR_CLOSED 4
 #define SHMEM_ERR_BUFFER 5
+#define SHMEM_ERR_TIMEOUT 6
+#define SHMEM_ERR_INVALID 7
 
 
 // C standard issues with compiling
@@ -29,7 +32,8 @@ int ftruncate(int fd, off_t length);
 
 /** Connection establishment using the acceptor:
  Acceptor is identified by 'name'. Client must know the name before opening.  To connect,
- a client takes the lock, sets client_control to the name of its control block.  The client then
+ a client takes the connect_mutex to gain exclusive access for connection establishment.
+ The client acquires the accept_mutex and sets client_control to the name of its control block.  The client then
  signals accept_cond. The client waits for ready_cond, the server takes the lock, creates its
  control block, sets server_control to the name of it's control block, and signals ready_cond.
  */
@@ -38,6 +42,7 @@ typedef struct {
 	int fd; // Server's file descriptor 
 	char name[SHMEM_MAX_KEY_BYTES]; // Name (client must know) to connect
 	pthread_mutex_t accept_mutex; // Mutex protecting this acceptor
+	pthread_mutex_t connect_mutex; // Mutex protecting the connection creation
 	pthread_cond_t accept_cond; // The client is ready to be accepted
 	pthread_cond_t ready_cond; // The server is done accepting and ready to talk
 	char server_control[SHMEM_MAX_KEY_BYTES]; // The server sets this to a non-empty name when accepting
@@ -63,6 +68,7 @@ typedef struct {
 typedef struct {
 	int fd;
 	int dest_fd;
+        int timeout;
 	shmem_control_t* control;
 	shmem_control_t* dest_control;
 } shmem_stream_t;
@@ -90,10 +96,10 @@ int shmem_stream_recv(shmem_stream_t* stream, char* buffer, size_t len);
 int shmem_stream_send(shmem_stream_t* stream, const char* buffer, size_t len);
 
 /* Copy len bytes of buffer into stream */
-int shmem_stream_control_write(shmem_control_t* control, const char* buffer, size_t len);
+int shmem_stream_control_write(shmem_control_t* control, const char* buffer, size_t len, int timeout);
 
 /* Read and copy len bytes into buffer. Advances read cursor */
-int shmem_stream_control_read(shmem_control_t* control, char* buffer, size_t len);
+int shmem_stream_control_read(shmem_control_t* control, char* buffer, size_t len, int timeout);
 
 /* Points buffer to a region of memory with len bytes of data. Does not adanvce cursor
  * This is useful as a zero-copy mechanism. Must call 'advance' when done with memory */

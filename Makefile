@@ -18,17 +18,20 @@ fork: fork.cpp
 $(TARGETS):
 	$(CXX) $(CXXFLAGS) $< -o $@  -I/usr/local/include/ -L/usr/local/lib -lmpi -lmpi_cxx
 
-SHMEM_SRC=shmem_server.c shmem_client.c
+SHMEM_SRC=shmem_server.c shmem_client.c shmem_parallel.c
 SHMEM_OBJ=$(SHMEM_SRC:.c=.o)
 
 
 .c.o:
-	$(CC) $(FLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 shmem_stream.o: shmem_stream.c
 	$(CC) $(CFLAGS) -c $< -o $@ -lrt
 
 shmem_server: shmem_stream.o shmem_server.o
+	$(CC) $(CFLAGS) $^ -o $@ -lrt
+
+shmem_parallel: shmem_stream.o shmem_parallel.o
 	$(CC) $(CFLAGS) $^ -o $@ -lrt
 
 shmem_client: shmem_stream.o shmem_client.o

@@ -12,29 +12,28 @@ int testPing(shmem_stream_t* stream, char* message);
 
 int testPing(shmem_stream_t* stream, char* message) {
 	int size = strlen(message);
-
+	int ec;
 	printf("Sending %d bytes...\n", size);
-	if (shmem_stream_send(stream, (char*) &size, sizeof(size))) {
-		return 1;
+	if ((ec = shmem_stream_send(stream, (char*) &size, sizeof(size)))) {
+		return ec;
 	}
-	if (shmem_stream_send(stream, message, size)) {
-		return 1;
+	if ((ec = shmem_stream_send(stream, message, size))) {
+		return ec;
 	}
 		
 	int recv;
-	if (shmem_stream_recv(stream, (char*) &recv, sizeof(recv))) {
-		return 1;
+	if (( ec = shmem_stream_recv(stream, (char*) &recv, sizeof(recv)))) {
+		return ec;
 	}
 	printf("Receiving %d bytes...\n", recv);
 	if (recv < 1 || recv > 1024 * 1024) {
 		return 1;
 	}
 	char* recvMsg = (char*) calloc (recv, 1);
-	if (shmem_stream_recv(stream, recvMsg, recv)) {
-		return 1;
+	if ((ec = shmem_stream_recv(stream, recvMsg, recv))) {
+		return ec;
 	}
 
-	printf("  received: %s\n", recvMsg);
 	if (strncmp(message, recvMsg, recv)) {
 		printf("  Bad response!\n");
 		return 1;
@@ -50,17 +49,25 @@ int main(int argc, char* argv[]) {
 		return 1;
 */
         shmem_stream_t stream;
+	stream.timeout = 3;
 	int ec = shmem_stream_connect("/server", &stream);
 	if (ec) {
 		printf("Unable to connect to server!\n");
+		return 1;
         }
 
 	int i;
 	for(i = 1; i < 1000; i++) {
 		char buffer[5];
 		sprintf(buffer, "%d", i);
-		if (testPing(&stream, buffer)) {
-			break;
+		if ((ec = testPing(&stream, buffer))) {
+			if (ec == SHMEM_ERR_TIMEOUT) {
+				printf("Timeout! CLosing connection\n");
+				shmem_stream_close(&stream);
+				return ec;
+			}
+			printf("Shmem error %d\n", ec);
+			return ec;
 		}
 	}
 
@@ -77,5 +84,6 @@ int main(int argc, char* argv[]) {
 			break;
 		}
 	}
+	printf("Client done\n");
 	shmem_stream_close(&stream);
 }

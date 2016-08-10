@@ -82,7 +82,7 @@ int shmem_stream_accept(shmem_acceptor_t* acceptor, shmem_stream_t* stream) {
 
     // Wait for accept_cond
     pthread_mutex_lock(&acceptor->accept_mutex);
-    while (strlen(acceptor->client_control) == 0) {
+    while (acceptor->client_control[0] == '\0') {
         pthread_cond_wait(&acceptor->accept_cond, &acceptor->accept_mutex);
 
         /* Exit if the acceptor was shut down */
@@ -151,7 +151,8 @@ int shmem_stream_connect(char* server_name, shmem_stream_t* stream) {
         return SHMEM_ERR_CLOSED;
     }
 
-    // Take lock, make local control block, set name, signal accept
+    // Take locks, make local control block, set name, signal accept
+    pthread_mutex_lock(&acceptor->connect_mutex);
     pthread_mutex_lock(&acceptor->accept_mutex);
 
     char name[SHMEM_MAX_KEY_BYTES];
@@ -159,6 +160,7 @@ int shmem_stream_connect(char* server_name, shmem_stream_t* stream) {
     if ((ec = shmem_create(name, sizeof(shmem_control_t), &stream->fd, (void**)&stream->control))) {
         printf("Error intializing shared memory for control block\n");
         pthread_mutex_unlock(&acceptor->accept_mutex);
+        pthread_mutex_unlock(&acceptor->connect_mutex);
         return ec;
     }
 
@@ -181,7 +183,7 @@ int shmem_stream_connect(char* server_name, shmem_stream_t* stream) {
     pthread_cond_signal(&acceptor->accept_cond);
 
     // TODO: add timeout
-    while (strlen(acceptor->server_control) == 0) {
+    while (acceptor->server_control[0] == '\0') {
         pthread_cond_wait(&acceptor->ready_cond, &acceptor->accept_mutex);
     }
 
@@ -189,27 +191,29 @@ int shmem_stream_connect(char* server_name, shmem_stream_t* stream) {
                    sizeof(shmem_control_t),
                    &stream->dest_fd,
                    (void**)&stream->dest_control))) {
-        pthread_mutex_unlock(&acceptor->accept_mutex);
         acceptor->server_control[0] = '\0';
+        pthread_mutex_unlock(&acceptor->accept_mutex);
+        pthread_mutex_unlock(&acceptor->connect_mutex);
         return ec;
     }
 
     mem_control->open = true;
     acceptor->server_control[0] = '\0';
     pthread_mutex_unlock(&acceptor->accept_mutex);
+    pthread_mutex_unlock(&acceptor->connect_mutex);
 
     return SHMEM_OK;
 }
 
 int shmem_stream_recv(shmem_stream_t* stream, char* buffer, size_t len) {
-    return shmem_stream_control_read(stream->control, buffer, len);
+    return shmem_stream_control_read(stream->control, buffer, len, stream->timeout);
 }
 
-int shmem_stream_send(shmem_stream_t* stream, const char* buffer, size_t len) {
-    return shmem_stream_control_write(stream->dest_control, buffer, len);
+int shmem_stream_send(shmem_stream_t* stream, const char* buffer, size_t len) { 
+   return shmem_stream_control_write(stream->dest_control, buffer, len, stream->timeout);
 }
 
-int shmem_stream_control_write(shmem_control_t* control, const char* buffer, size_t len) {
+int shmem_stream_control_write(shmem_control_t* control, const char* buffer, size_t len, int timeout) {
     pthread_mutex_lock(&control->mutex);
 
     size_t bytes_written = 0;
@@ -217,9 +221,28 @@ int shmem_stream_control_write(shmem_control_t* control, const char* buffer, siz
     /* While not all data written */
     while (bytes_written < len) {
 
+        // Timeout in 'timeout' seconds
+        struct timespec future;
+	struct timeval now;
+        gettimeofday(&now, NULL); 
+        future.tv_sec = now.tv_sec + timeout;
+        future.tv_nsec = now.tv_usec / 1000;
+
     	/* Wait until there is space in the buffer */
     	while (control->length == SHMEM_MAX_BUF_LEN ) {
-	        pthread_cond_wait(&control->write_cond, &control->mutex);
+	        int ret;
+		if (timeout) {
+			ret = pthread_cond_timedwait(&control->write_cond, &control->mutex, &future);
+		} else {
+			ret = pthread_cond_wait(&control->write_cond, &control->mutex);
+		}
+		if (ret == ETIMEDOUT) {
+	        	pthread_mutex_unlock(&control->mutex);
+			return SHMEM_ERR_TIMEOUT;
+		} else if (ret) {
+	        	pthread_mutex_unlock(&control->mutex);
+			return SHMEM_ERR_INVALID;
+		}
 
             if (!control->open) {
 	        	pthread_mutex_unlock(&control->mutex);
@@ -253,16 +276,35 @@ int shmem_stream_control_write(shmem_control_t* control, const char* buffer, siz
     return SHMEM_OK;
 }
 
-int shmem_stream_control_read(shmem_control_t* control, char* buffer, size_t len) {
+int shmem_stream_control_read(shmem_control_t* control, char* buffer, size_t len, int timeout) {
     pthread_mutex_lock(&control->mutex);
     
     /* Read all bytes requested */
     size_t bytes_read = 0;
     while (bytes_read < len) {
 
+        // Timeout in 'timeout' seconds
+	struct timespec future;
+	struct timeval now;
+        gettimeofday(&now, NULL); 
+        future.tv_sec = now.tv_sec + timeout;
+        future.tv_nsec = now.tv_usec / 1000;
+
     	/* Wait until data is available */
-		while ((size_t)control->length == 0) {
-	        pthread_cond_wait(&control->read_cond, &control->mutex);
+	while ((size_t)control->length == 0) {
+	        int ret;
+		if (timeout) {
+			ret = pthread_cond_timedwait(&control->read_cond, &control->mutex, &future);
+		} else {
+			ret = pthread_cond_wait(&control->read_cond, &control->mutex);
+		}
+		if (ret == ETIMEDOUT) {
+	        	pthread_mutex_unlock(&control->mutex);
+			return SHMEM_ERR_TIMEOUT;
+		} else if (ret) {
+	        	pthread_mutex_unlock(&control->mutex);
+			return SHMEM_ERR_INVALID;
+		}
 
 	        if (!control->open) {
 	        	pthread_mutex_unlock(&control->mutex);
